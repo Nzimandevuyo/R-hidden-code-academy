@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head><title>Private Page</title></head>
+<body>
+  <h1>This is your private page</h1>
+  <p>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(neuralnet)
+library(NeuralNetTools)
+library(e1071)
+library(hrbrthemes)
+library(MASS)
+library(lattice)
+set.seed(123)
+```
+
+# Q1. SVM on mtcars
+
+## (i) Description and Structure
+```{r}
+desc <- "The 'mtcars' dataset comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models)."
+cat(desc)
+str(mtcars)
+```
+
+## (ii) Train-Test Split
+```{r}
+sample_index <- sample(seq_len(nrow(mtcars)), size = 0.7 * nrow(mtcars))
+train_data <- mtcars[sample_index, ]
+test_data <- mtcars[-sample_index, ]
+```
+
+## (iii) Fit SVM Models
+```{r}
+svm_radial <- svm(mpg ~ ., data = train_data, kernel = "radial")
+summary(svm_radial)
+
+svm_poly <- svm(mpg ~ ., data = train_data, kernel = "polynomial")
+summary(svm_poly)
+```
+
+## (iv) Predictions
+```{r}
+pred_radial <- predict(svm_radial, test_data)
+pred_poly <- predict(svm_poly, test_data)
+```
+
+## (v) RMSE Evaluation
+```{r}
+rmse <- function(actual, predicted) {
+  sqrt(mean((actual - predicted)^2))
+}
+rmse_radial <- rmse(test_data$mpg, pred_radial)
+rmse_poly <- rmse(test_data$mpg, pred_poly)
+
+rmse_radial
+rmse_poly
+```
+
+# Q2. Generalized Linear Models (GLM)
+
+## (i) Fit GLM1
+```{r}
+glm1 <- glm(vs ~ mpg + wt + hp, data = train_data, family = binomial)
+summary(glm1)
+```
+
+## (ii) Predictions and Accuracy (GLM1)
+```{r}
+pred1_prob <- predict(glm1, newdata = test_data, type = "response")
+pred1_class <- ifelse(pred1_prob > 0.5, 1, 0)
+accuracy1 <- mean(pred1_class == test_data$vs)
+accuracy1
+```
+
+## (iii) Fit GLM2 with cyl and drat
+```{r}
+glm2 <- glm(vs ~ mpg + wt + hp + cyl + drat, data = train_data, family = binomial)
+summary(glm2)
+```
+
+## (iv) Predictions and Accuracy (GLM2)
+```{r}
+pred2_prob <- predict(glm2, newdata = test_data, type = "response")
+pred2_class <- ifelse(pred2_prob > 0.5, 1, 0)
+accuracy2 <- mean(pred2_class == test_data$vs)
+accuracy2
+```
+
+## (v) Compare AICs
+```{r}
+AIC(glm1)
+AIC(glm2)
+```
+
+## (vi) Overfitting Check
+```{r}
+train_accuracy1 <- mean(ifelse(predict(glm1, train_data, type = "response") > 0.5, 1, 0) == train_data$vs)
+train_accuracy2 <- mean(ifelse(predict(glm2, train_data, type = "response") > 0.5, 1, 0) == train_data$vs)
+
+data.frame(Model = c("GLM1", "GLM2"),
+           TrainAccuracy = c(train_accuracy1, train_accuracy2),
+           TestAccuracy = c(accuracy1, accuracy2))
+```
+
+## (vii) Regression Line for mpg vs wt
+```{r}
+ggplot(train_data, aes(x = wt, y = mpg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  theme_classic() +
+  ggtitle("Linear Regression of mpg vs wt")
+```
+
+# Q3. ANOVA on PlantGrowth
+
+## (i) Structure, Summary, Median
+```{r}
+data("PlantGrowth")
+str(PlantGrowth)
+summary(PlantGrowth)
+median(PlantGrowth$weight)
+```
+
+## (ii) ANOVA
+```{r}
+anova_model <- aov(weight ~ group, data = PlantGrowth)
+summary(anova_model)
+```
+
+## (iii) p-value
+```{r}
+summary(anova_model)[[1]]$'Pr(>F)'[1]
+```
+
+## (iv) Histogram with Density Curve
+```{r}
+ggplot(PlantGrowth, aes(x = weight)) +
+  geom_histogram(aes(y = ..density..),
+                 binwidth = 0.2,
+                 fill = "lightblue", 
+                 color = "red") +
+  geom_density(color = "red") +
+  theme_classic() +
+  ggtitle("Histogram and Density Curve of Plant Weights")
+```
+
+# Q4. ANN on rock Dataset
+
+## (i) Structure and Summary
+```{r}
+data("rock")
+str(rock)
+summary(rock)
+```
+
+## (ii) Normalize
+```{r}
+normalize <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+rock_norm <- as.data.frame(lapply(rock, normalize))
+summary(rock_norm)
+```
+
+## (iii) Split Data
+```{r}
+set.seed(123)
+sample_index <- sample(seq_len(nrow(rock_norm)), size = 0.7 * nrow(rock_norm))
+train_rock <- rock_norm[sample_index, ]
+test_rock <- rock_norm[-sample_index, ]
+```
+
+## (iv) Fit ANN Model
+```{r}
+features <- names(train_rock)[names(train_rock) != "perm"]
+formula <- as.formula(paste("perm ~", paste(features, collapse = " + ")))
+
+ann_model <- neuralnet(formula, data = train_rock, hidden = c(5), linear.output = TRUE)
+plotnet(ann_model)
+```
+
+## (v) Predictions and RMSE
+```{r}
+pred_ann <- compute(ann_model, test_rock[, features])
+predicted_values <- pred_ann$net.result
+actual_values <- test_rock$perm
+rmse_ann <- rmse(actual_values, predicted_values)
+rmse_ann
+```
+
+# Q5. Factorial Function
+
+## (i) Factorial using Loop
+```{r}
+factorial_loop <- function(n) {
+  result <- 1
+  for (i in 1:n) {
+    result <- result * i
+  }
+  return(result)
+}
+
+# (ii) Factorial of 8
+factorial_loop(8)
+```
+</p>
+</body>
+</html>
